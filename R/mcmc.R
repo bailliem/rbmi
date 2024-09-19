@@ -59,28 +59,17 @@ fit_mcmc <- function(
     quiet = FALSE
 ) {
 
+    # store initialisation method
+    init_method <- method$init_method
+
     n_imputations <- method$n_samples
     burn_in <- method$burn_in
     seed <- method$seed
     burn_between <- method$burn_between
     same_cov <- method$same_cov
 
-    # fit MMRM (needed for initial values)
-    mmrm_initial <- fit_mmrm(
-        designmat = designmat,
-        outcome = outcome,
-        subjid = subjid,
-        visit = visit,
-        group = group,
-        cov_struct = "us",
-        REML = TRUE,
-        same_cov = same_cov
-    )
 
-    if (mmrm_initial$failed) {
-        stop("Fitting MMRM to original dataset failed")
-    }
-
+    # prepare data for stan w/o init values
     stan_data <- prepare_stan_data(
         ddat = designmat,
         subjid = subjid,
@@ -89,30 +78,79 @@ fit_mcmc <- function(
         group = ife(same_cov == TRUE, rep(1, length(group)), group)
     )
 
-    stan_data$Sigma_init <- ife(
-        same_cov == TRUE,
-        list(mmrm_initial$sigma[[1]]),
-        mmrm_initial$sigma
-    )
 
-    sampling_args <- list(
-        object = stanmodels$MMRM,
-        data = stan_data,
-        pars = c("beta", "Sigma"),
-        chains = 1,
-        warmup = burn_in,
-        thin = burn_between,
-        iter = burn_in + burn_between * n_imputations,
-        init = list(list(
-            theta = as.vector(stan_data$R %*% mmrm_initial$beta),
-            sigma = mmrm_initial$sigma
-        )),
-        refresh = ife(
-            quiet,
-            0,
-            (burn_in + burn_between * n_imputations) / 10
+    # switch based on value of init_method.
+    # if "mmrm" call fit_mmrm
+    # if random use rstan default option
+    # see http://mc-stan.org/rstan/reference/stan.html
+
+    if (init_method == "mmrm"){
+
+        # fit MMRM (needed for initial values)
+        mmrm_initial <- fit_mmrm(
+            designmat = designmat,
+            outcome = outcome,
+            subjid = subjid,
+            visit = visit,
+            group = group,
+            cov_struct = "us",
+            REML = TRUE,
+            same_cov = same_cov
         )
-    )
+
+        if (mmrm_initial$failed) {
+            stop("Fitting MMRM to original dataset failed")
+        }
+
+        # add mmrm init values
+        stan_data$Sigma_init <- ife(
+            same_cov == TRUE,
+            list(mmrm_initial$sigma[[1]]),
+            mmrm_initial$sigma
+        )
+
+        sampling_args <- list(
+            object = stanmodels$MMRM,
+            data = stan_data,
+            pars = c("beta", "Sigma"),
+            chains = 1,
+            warmup = burn_in,
+            thin = burn_between,
+            iter = burn_in + burn_between * n_imputations,
+            init = list(list(
+                theta = as.vector(stan_data$R %*% mmrm_initial$beta),
+                sigma = mmrm_initial$sigma
+            )),
+            refresh = ife(
+                quiet,
+                0,
+                (burn_in + burn_between * n_imputations) / 10
+            )
+        )
+
+    }
+    else if(init_method == "random") {
+
+        sampling_args <- list(
+            object = stanmodels$Random,
+            data = stan_data,
+            pars = c("beta", "Sigma"),
+            chains = 1,
+            warmup = burn_in,
+            thin = burn_between,
+            iter = burn_in + burn_between * n_imputations,
+            init = "random",
+            refresh = ife(
+                quiet,
+                0,
+                (burn_in + burn_between * n_imputations) / 10
+            )
+        )
+    }
+    else {
+        stop("init_method must be either 'mmrm' or 'random'")
+    }
+
 
     assert_that(
         !is.na(seed),
@@ -153,8 +191,6 @@ fit_mcmc <- function(
 
     return(ret_obj)
 }
-
-
 
 
 #' Transform array into list of arrays

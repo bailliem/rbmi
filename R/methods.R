@@ -7,6 +7,12 @@
 #'
 #' @name method
 #'
+#' @param init_method a character string which defines initialization.
+#' The default is to set initial starting values using the "mmrm" model.
+#' Alternatively, random values can be used through by specifying "random".
+#' See rstan documentation http://mc-stan.org/rstan/reference/stan.html for
+#' more details.
+#'
 #' @param burn_in a numeric that specifies how many observations should be discarded
 #' prior to extracting actual samples. Note that the sampler
 #' is initialized at the maximum likelihood estimates and a weakly informative
@@ -89,13 +95,22 @@
 #'
 #' @export
 method_bayes <- function(
+    init_method = "mmrm",
     burn_in = 200,
     burn_between = 50,
     same_cov = TRUE,
     n_samples = 20,
     seed = sample.int(.Machine$integer.max, 1)
 ) {
+
+    # Assert if init_method not "mmrm" or "random".
+    assert_that(
+        init_method %in% c("mmrm", "random"),
+        msg = "init_method must be either 'mmrm' or 'random'"
+    )
+
     x <- list(
+        init_method = init_method,
         burn_in = burn_in,
         burn_between = burn_between,
         same_cov = same_cov,
@@ -166,7 +181,7 @@ method_condmean <- function(
     if (type == "bootstrap") {
         x$n_samples <- n_samples
     }
-    
+
     return(as_class(x, c("method", "condmean")))
 }
 

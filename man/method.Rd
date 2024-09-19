@@ -9,6 +9,7 @@
 \title{Set the multiple imputation methodology}
 \usage{
 method_bayes(
+  init_method = "mmrm",
   burn_in = 200,
   burn_between = 50,
   same_cov = TRUE,
@@ -43,6 +44,10 @@ method_bmlmi(
 )
 }
 \arguments{
+\item{init_method}{a character string which defines initialization.
+The default is to set initial starting values using the "mmrm" model.
+Alternatively, random values can be used through by specifying "random".}
+
 \item{burn_in}{a numeric that specifies how many observations should be discarded
 prior to extracting actual samples. Note that the sampler
 is initialized at the maximum likelihood estimates and a weakly informative
